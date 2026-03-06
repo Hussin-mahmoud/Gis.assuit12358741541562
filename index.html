@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIS.Asyut - Hussein Mahmoud</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon: #00e5ff; --card-bg: rgba(17, 24, 39, 0.95); }
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; transition: 0.3s; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+        
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; opacity: 1; filter: none !important; }
+
+        .navbar { background: var(--card-bg); padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--neon); position: relative; z-index: 1000; }
+        .logo { font-size: 26px; font-weight: 900; color: var(--neon); text-shadow: 0 0 15px var(--neon); }
+
+        .view-section { display: none; position: relative; z-index: 100; height: 100vh; flex-direction: column; }
+        .content-wrapper { padding: 20px; flex: 1; overflow-y: auto; background: rgba(0,0,0,0.4); }
+        
+        .category-btn { background: var(--card-bg); border: 2px solid var(--neon); padding: 30px; border-radius: 20px; margin-bottom: 20px; text-align: center; cursor: pointer; box-shadow: 0 5px 15px rgba(0, 229, 255, 0.1); }
+        .category-btn:hover { transform: scale(1.02); box-shadow: 0 0 25px var(--neon); }
+        .category-btn h2 { margin: 0; color: #fff; font-size: 24px; }
+
+        .big-button-card { background: rgba(31, 41, 55, 0.9); border: 1px solid var(--neon); padding: 15px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .action-btn { background: linear-gradient(135deg, var(--neon), #0072ff); color: #000; padding: 10px 25px; border-radius: 12px; font-weight: 900; border: none; cursor: pointer; }
+
+        #authBox { display: flex; position: fixed; inset: 0; z-index: 1500; justify-content: center; align-items: center; background: rgba(0,0,0,0.3); }
+        .auth-card { background: var(--card-bg); border: 3px solid var(--neon); padding: 40px; border-radius: 30px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 0 30px var(--neon); }
+        input, select { width: 100%; padding: 14px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #374151; background: #111827; color: white; text-align: center; }
+
+        .footer-credit { position: fixed; bottom: 12px; width: 100%; text-align: center; z-index: 1000; font-size: 18px; pointer-events: none; }
+        .footer-credit span { color: #fff; opacity: 0.8; }
+        .footer-credit a { color: var(--neon); text-decoration: none; text-shadow: 0 0 10px var(--neon), 0 0 20px var(--neon); animation: pulse 2s infinite; pointer-events: auto; cursor: pointer; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        #videoPlayerBox { display: none; position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.98); justify-content: center; align-items: center; }
+        .video-window { width: 95%; max-width: 850px; border: 3px solid var(--neon); border-radius: 20px; overflow: hidden; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div class="footer-credit">
+        <span>Developed by</span> 
+        <a href="https://www.instagram.com/hussin_mahmoud1?igsh=cDY2bnJneGg5ZDV3" target="_blank"><b>Hussein Mahmoud</b></a>
+    </div>
+
+    <div id="authBox">
+        <div class="auth-card">
+            <div class="logo" id="authTitle" style="margin-bottom: 30px;">GIS.Asyut</div>
+            <input type="text" id="uName" placeholder="اسم المستخدم">
+            <input type="text" id="uPhone" class="hidden" placeholder="رقم الهاتف">
+            <input type="password" id="uPass" placeholder="كلمة السر">
+            <button id="authBtn" class="action-btn" style="width: 100%;" onclick="runAuth()">دخول للمنصة</button>
+            <p onclick="swap()" style="cursor:pointer; color:#9ca3af; margin-top:20px;">ليس لديك حساب؟ <b style="color:var(--neon)">إنشاء حساب جديد</b></p>
+        </div>
+    </div>
+
+    <div id="homeView" class="view-section">
+        <div class="navbar">
+            <div class="logo">GIS.Asyut</div>
+            <button onclick="logout()" style="background:#ff3d00; color:white; border:none; padding:8px 18px; border-radius:10px; cursor:pointer;">خروج</button>
+        </div>
+        <div class="content-wrapper">
+            <div id="categories">
+                <div class="category-btn" onclick="toggleCategory('video')"><h2>📺 فيديوهات الشرح</h2></div>
+                <div class="category-btn" onclick="toggleCategory('book')"><h2>📚 الكتب والمذكرات</h2></div>
+                <div class="category-btn" onclick="toggleCategory('exam')"><h2>📝 الامتحانات أونلاين</h2></div>
+            </div>
+            <div id="list-container" class="hidden">
+                <button onclick="backToCats()" style="color:var(--neon); background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:15px;">⬅ العودة للقائمة</button>
+                <div id="items-render"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="adminPanel" class="view-section">
+        <div class="navbar"><div class="logo">لوحة التحكم</div><button onclick="logout()">إغلاق</button></div>
+        <div class="content-wrapper" style="max-width: 600px; margin: auto;">
+            <div style="background: var(--card-bg); padding: 25px; border-radius: 20px; border: 1px solid var(--neon);">
+                <input type="text" id="addName" placeholder="اسم الدرس">
+                <input type="text" id="addLink" placeholder="الرابط">
+                <input type="text" id="addSub" placeholder="المادة">
+                <select id="addType">
+                    <option value="video">فيديو شرح</option>
+                    <option value="book">مذكرة / كتاب</option>
+                    <option value="exam">امتحان</option>
+                </select>
+                <button class="action-btn" style="width:100%" onclick="addItem()">إضافة الآن</button>
+            </div>
+            <div id="admin-list" style="margin-top:20px;"></div>
+        </div>
+    </div>
+
+    <div id="videoPlayerBox">
+        <div class="video-window">
+            <button onclick="closeVideo()" style="background:red; color:white; border:none; width:100%; padding:15px; font-weight:bold;">إغلاق X</button>
+            <div id="playerFrame" style="aspect-ratio: 16/9;"></div>
+        </div>
+    </div>
+
+    <script>
+        const URL = "https://script.google.com/macros/s/AKfycbyhYJeijXCpxx8tLTfB3Ay-iVh7R842QCH3RiCduyMIlYcu0fZTbiwZF1lMCTl1YHswyQ/exec"; 
+        let isRegister = false;
+        let allData = [];
+
+        // التحقق من حالة الدخول عند فتح الصفحة (منع الخروج عند الريفرش)
+        window.onload = function() {
+            const savedUser = localStorage.getItem('gis_user');
+            if(savedUser) {
+                if(savedUser === "admin") {
+                    showView('adminPanel'); loadAdminData();
+                } else {
+                    showView('homeView'); fetchAll();
+                }
+            }
+        };
+
+        var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([27.1850, 31.1850], 15);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
+        let lng = 31.1850;
+        function moveMap() { lng += 0.00002; map.panTo([27.1850, lng], { animate: true, duration: 2 }); requestAnimationFrame(moveMap); }
+        moveMap();
+
+        function swap() {
+            isRegister = !isRegister;
+            document.getElementById('uPhone').classList.toggle('hidden');
+            document.getElementById('authTitle').innerText = isRegister ? "إنشاء حساب" : "GIS.Asyut";
+            document.getElementById('authBtn').innerText = isRegister ? "تسجيل الحساب" : "دخول للمنصة";
+        }
+
+        async function runAuth() {
+            const u = document.getElementById('uName').value.trim();
+            const p = document.getElementById('uPass').value.trim();
+            const ph = document.getElementById('uPhone').value.trim();
+            if(!u || !p) return;
+
+            if(u === "777" && p === "s7s") { 
+                localStorage.setItem('gis_user', 'admin');
+                showView('adminPanel'); loadAdminData(); return; 
+            }
+
+            if(isRegister) {
+                await fetch(`${URL}?name=${encodeURIComponent(u)}&pass=${encodeURIComponent(p)}&phone=${encodeURIComponent(ph)}&action=signup`, {mode:'no-cors'});
+                alert("تم التسجيل! ادخل الآن"); swap(); return;
+            }
+
+            try {
+                const res = await fetch(`${URL}?user=${encodeURIComponent(u)}&pass=${encodeURIComponent(p)}`);
+                const text = await res.text();
+                if(text.trim().toLowerCase() === "found") {
+                    localStorage.setItem('gis_user', u); // حفظ حالة الدخول
+                    showView('homeView'); fetchAll();
+                } else { alert("⚠️ البيانات غير موجودة في الشيت!"); }
+            } catch(e) { alert("خطأ في الاتصال"); }
+        }
+
+        async function fetchAll() {
+            const r = await fetch(`${URL}?action=getData`);
+            allData = await r.json();
+        }
+
+        function toggleCategory(type) {
+            document.getElementById('categories').classList.add('hidden');
+            const list = document.getElementById('list-container');
+            list.classList.remove('hidden');
+            const render = document.getElementById('items-render');
+            render.innerHTML = "";
+            allData.filter(i => i.type === type).forEach(item => {
+                render.innerHTML += `
+                    <div class="big-button-card">
+                        <div><b>${item.name}</b><br><small style="color:var(--neon)">${item.subject}</small></div>
+                        <button class="action-btn" onclick="${item.type==='video'?`playVideo('${item.link}')`:`window.open('${item.link}')`}">فتح</button>
+                    </div>`;
+            });
+        }
+
+        function backToCats() {
+            document.getElementById('categories').classList.remove('hidden');
+            document.getElementById('list-container').classList.add('hidden');
+        }
+
+        function playVideo(link) {
+            let id = link.includes("v=") ? link.split("v=")[1].split("&")[0] : link.split("be/")[1];
+            document.getElementById('playerFrame').innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${id}?rel=0&autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+            document.getElementById('videoPlayerBox').style.display = 'flex';
+        }
+
+        function showView(id) {
+            document.getElementById('authBox').style.display = 'none';
+            document.querySelectorAll('.view-section').forEach(v => v.style.display = 'none');
+            document.getElementById(id).style.display = 'flex';
+        }
+
+        async function loadAdminData() {
+            const r = await fetch(`${URL}?action=getData`);
+            const data = await r.json();
+            const list = document.getElementById('admin-list'); list.innerHTML = "";
+            data.forEach((item, index) => {
+                list.innerHTML += `<div class="big-button-card" style="padding:15px;"><span>${item.name}</span><button onclick="deleteItem(${index+2})" style="color:red; background:none; border:none; cursor:pointer;">حذف</button></div>`;
+            });
+        }
+
+        async function addItem() {
+            const n = document.getElementById('addName').value, l = document.getElementById('addLink').value,
+                  s = document.getElementById('addSub').value, t = document.getElementById('addType').value;
+            await fetch(`${URL}?name=${encodeURIComponent(n)}&link=${encodeURIComponent(l)}&subject=${encodeURIComponent(s)}&type=${t}&action=upload`, {mode:'no-cors'});
+            alert("تم!"); loadAdminData();
+        }
+
+        async function deleteItem(id) {
+            await fetch(`${URL}?action=delete&row=${id}`, {mode:'no-cors'});
+            loadAdminData();
+        }
+
+        function closeVideo() { document.getElementById('videoPlayerBox').style.display='none'; document.getElementById('playerFrame').innerHTML=""; }
+        
+        function logout() { 
+            localStorage.removeItem('gis_user'); // مسح حالة الدخول عند الخروج المتعمد
+            location.reload(); 
+        }
+    </script>
+</body>
+</html>
