@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Hussin Mahmoud</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <style>
+        :root { --main: #0f172a; --card: #1e293b; --accent: #38bdf8; --green: #10b981; --red: #ef4444; }
+        body { background: var(--main); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; direction: rtl; }
+        .container { max-width: 1000px; margin: auto; }
+        .card { background: var(--card); border-radius: 15px; padding: 20px; border: 1px solid #334155; margin-bottom: 20px; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 8px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; margin-top: 10px; }
+        .btn-up { background: var(--accent); color: #0f172a; }
+        .btn-excel { background: var(--green); color: white; display: none; }
+        .btn-del { background: var(--red); color: white; width: auto; padding: 5px 12px; font-size: 12px; }
+        .item-list { background: #0f172a; padding: 10px; border-radius: 10px; max-height: 300px; overflow-y: auto; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding: 8px 0; }
+        .progress { height: 8px; background: #334155; border-radius: 4px; display: none; margin: 10px 0; overflow: hidden; }
+        .bar { height: 100%; background: var(--accent); width: 0%; transition: 0.2s; }
+        footer { text-align: center; margin-top: 30px; border-top: 1px solid #334155; padding: 20px; }
+        footer a { color: var(--accent); text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="admin-gate" style="max-width: 400px; margin: 80px auto; text-align: center;">
+    <div class="card">
+        <h2>GIS Dashboard</h2>
+        <input type="password" id="admin-pass" placeholder="كلمة السر">
+        <button class="btn btn-up" onclick="login()">دخول</button>
+    </div>
+</div>
+
+<div id="admin-panel" class="container" style="display: none;">
+    <div class="card">
+        <h3>🚀 نشر محتوى جديد</h3>
+        <input type="text" id="title" placeholder="عنوان الفيديو أو الملف">
+        <select id="type">
+            <option value="videos">🎬 فيديو</option>
+            <option value="files">📚 ملخص / صورة</option>
+            <option value="exams">📝 امتحان</option>
+        </select>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0;">ارفع من جهازك:</p>
+        <input type="file" id="file-in">
+        <p style="text-align: center; font-size: 11px; margin: 5px;">أو حط رابط جاهز:</p>
+        <input type="text" id="url-in" placeholder="رابط يوتيوب أو جوجل درايف">
+        <div class="progress" id="pBox"><div class="bar" id="pBar"></div></div>
+        <button class="btn btn-up" onclick="startPublish()">نشر الآن</button>
+    </div>
+
+    <div class="card">
+        <h3>📊 إدارة المحتوى (حذف)</h3>
+        <div id="manage-list" class="item-list">جاري التحميل...</div>
+    </div>
+
+    <div class="card">
+        <h3>🔑 نظام الأكواد</h3>
+        <button class="btn btn-up" onclick="generateCodes()" style="background:#6366f1; color:white;">توليد 500 كود جديد</button>
+        <button id="excelBtn" class="btn btn-excel" onclick="downloadExcel()">📥 تحميل الأكواد في ملف Excel</button>
+        <div id="codes-preview" style="font-size: 10px; margin-top: 10px; max-height: 100px; overflow-y: auto; color: #94a3b8;"></div>
+    </div>
+
+    <footer>
+        <p>Developed by <a href="https://www.instagram.com/hussin_mahmoud1?igsh=cDY2bnJneGg5ZDV3" target="_blank">Hussin Mahmoud</a></p>
+    </footer>
+</div>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://gis-platform-c7d34-default-rtdb.firebaseio.com/",
+        storageBucket: "gis-platform-c7d34.appspot.com"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const st = firebase.storage();
+    let codesForExcel = [];
+
+    function login() {
+        if(document.getElementById('admin-pass').value === "ADMIN123") {
+            document.getElementById('admin-gate').style.display='none';
+            document.getElementById('admin-panel').style.display='block';
+            listenToContent();
+        }
+    }
+
+    async function startPublish() {
+        const title = document.getElementById('title').value;
+        const type = document.getElementById('type').value;
+        const file = document.getElementById('file-in').files[0];
+        const url = document.getElementById('url-in').value;
+        if(!title) return alert("اكتب العنوان");
+        if(file) {
+            document.getElementById('pBox').style.display='block';
+            const ref = st.ref().child('uploads/' + Date.now() + "_" + file.name);
+            const task = ref.put(file);
+            task.on('state_changed', 
+                (s) => { document.getElementById('pBar').style.width = (s.bytesTransferred/s.totalBytes)*100 + '%'; },
+                (e) => alert(e),
+                () => { task.snapshot.ref.getDownloadURL().then(link => saveToDB(title, type, link)); }
+            );
+        } else if(url) {
+            saveToDB(title, type, url);
+        }
+    }
+
+    function saveToDB(title, type, link) {
+        db.ref('GisAcademy/Content').push({ title, type, link })
+        .then(() => {
+            alert("تم النشر!");
+            document.getElementById('pBox').style.display='none';
+            document.getElementById('title').value = "";
+            document.getElementById('url-in').value = "";
+        });
+    }
+
+    function listenToContent() {
+        db.ref('GisAcademy/Content').on('value', snap => {
+            const list = document.getElementById('manage-list');
+            list.innerHTML = "";
+            snap.forEach(item => {
+                list.innerHTML += `<div class="item-row">
+                    <span>${item.val().title}</span>
+                    <button class="btn-del" onclick="db.ref('GisAcademy/Content/${item.key}').remove()">حذف</button>
+                </div>`;
+            });
+        });
+    }
+
+    function generateCodes() {
+        codesForExcel = [];
+        for(let i=0; i<500; i++) {
+            let c = "GIS-" + Math.floor(10000 + Math.random()*90000);
+            db.ref('GisAcademy/Codes/'+c).set({status: 'unused'});
+            codesForExcel.push([c]);
+        }
+        document.getElementById('excelBtn').style.display = 'block';
+        alert("تم توليد 500 كود ثابتة!");
+    }
+
+    function downloadExcel() {
+        const ws = XLSX.utils.aoa_to_sheet([["الأكواد"], ...codesForExcel]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Codes");
+        XLSX.writeFile(wb, "Hussin_Mahmoud_Codes.xlsx");
+    }
+</script>
+</body>
+</html>
